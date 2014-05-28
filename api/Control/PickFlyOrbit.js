@@ -13,6 +13,7 @@ BIMSURFER.Control.PickFlyOrbit = BIMSURFER.Class(BIMSURFER.Control, {
 	panDragging: false,
 	orbiting: false,
 	flying: false,
+	panning: false,
 	lastX: null,
 	lastY: null,
 	downX: null,
@@ -23,6 +24,8 @@ BIMSURFER.Control.PickFlyOrbit = BIMSURFER.Class(BIMSURFER.Control, {
 	pitch: 0,
 	zoom: 0,
 	prevZoom: 0,
+	panX:0,
+	panY:0,
 
 	lookAt: null,
 	startEye: { x: 0, y: 0, z: 0 },
@@ -206,6 +209,43 @@ BIMSURFER.Control.PickFlyOrbit = BIMSURFER.Class(BIMSURFER.Control, {
 
 			this.orbiting = false;
 		}
+
+		if(this.panning) {
+			//////////////////////////////
+
+			var eyeVector = [this.eye.x, this.eye.y, this.eye.z];
+			var lookVector = [this.look.x, this.look.y, this.look.z];
+
+			var up = this.lookAt.getUp();
+			var upVector = [up.x, up.y, up.z];
+
+			var unprojectMatrix = [
+				[0.0, 0.0, 0.0],
+				[0.0, 0.0, 0.0],
+				[0.0, 0.0, 0.0]
+			];
+			SceneJS_math_subVec3(eyeVector, lookVector, unprojectMatrix[2]);
+			SceneJS_math_cross3Vec3(upVector, unprojectMatrix[2], unprojectMatrix[0]);
+			SceneJS_math_normalizeVec3(unprojectMatrix[0]);
+			SceneJS_math_cross3Vec3(unprojectMatrix[2], unprojectMatrix[0], unprojectMatrix[1]);
+			SceneJS_math_normalizeVec3(unprojectMatrix[1]);
+			SceneJS_math_mulVec3Scalar(unprojectMatrix[0], this.panX);
+			SceneJS_math_mulVec3Scalar(unprojectMatrix[1], this.panY);
+			var worldPosition = [0.0, 0.0, 0.0];
+			SceneJS_math_addVec3(unprojectMatrix[0], unprojectMatrix[1], worldPosition);
+
+			var newEye = SceneJS_math_addVec3(eyeVector, worldPosition);
+			var newLook = SceneJS_math_addVec3(lookVector, worldPosition);
+			var pivotVector = [this.currentPivot.x, this.currentPivot.y, this.currentPivot.z];
+			var newPivot = SceneJS_math_addVec3(pivotVector, worldPosition);
+
+			this.lookAt.setLook({x: newLook[0], y: newLook[1], z: newLook[2]});
+			this.lookAt.setEye({x: newEye[0], y: newEye[1], z: newEye[2]});
+			this.eye = this.lookAt.getEye();
+			this.look = this.lookAt.getLook();
+			this.currentPivot = {x: newPivot[0], y: newPivot[1], z: newPivot[2]};
+			this.panning = false;
+		}
 	},
 
 	/**
@@ -245,6 +285,18 @@ BIMSURFER.Control.PickFlyOrbit = BIMSURFER.Class(BIMSURFER.Control, {
 			this.orbiting = true;
 		} else if(this.panDragging) {
 
+			this.panX = this.lastX -x;
+			this.panY = y - this.lastY;
+			if(this.panX == 0 && this.panY == 0) {
+				return;
+			}
+			var delta = [this.panX, this.panY];
+			var deltaLength = SceneJS_math_lenVec2(delta);
+			var panFactor = BIMSURFER.Constants.camera.panSpeedFactor / deltaLength;;
+			this.panX = this.panX  * panFactor;
+			this.panY = this.panY * panFactor;
+
+			this.panning = true;
 		}
 
 		this.lastX = x;
